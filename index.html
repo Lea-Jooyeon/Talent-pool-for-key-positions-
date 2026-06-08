@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retentics 인재풀</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #222222;
+    --border: #2a2a2a;
+    --border2: #333;
+    --text: #f0f0f0;
+    --text2: #888;
+    --text3: #555;
+    --accent: #00e5a0;
+    --accent2: #00b87a;
+    --ds: #6366f1;
+    --be: #f59e0b;
+    --fe: #3b82f6;
+    --ai: #ec4899;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans KR', sans-serif;
+    font-weight: 300;
+    min-height: 100vh;
+  }
+
+  /* ── 비밀번호 화면 ── */
+  #lock-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .lock-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 16px;
+    padding: 2.5rem 2rem;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+  .lock-logo {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin-bottom: 2rem;
+  }
+  .lock-icon {
+    font-size: 32px;
+    margin-bottom: 1rem;
+  }
+  .lock-title {
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+  .lock-sub {
+    font-size: 13px;
+    color: var(--text3);
+    margin-bottom: 2rem;
+    line-height: 1.6;
+  }
+  .lock-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    outline: none;
+    text-align: center;
+    letter-spacing: 0.15em;
+    margin-bottom: 12px;
+    transition: border-color 0.15s;
+  }
+  .lock-input:focus { border-color: var(--accent); }
+  .lock-input.error { border-color: #ef4444; animation: shake 0.3s; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+  }
+  .lock-btn {
+    width: 100%;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Noto Sans KR', sans-serif;
+    transition: background 0.15s;
+  }
+  .lock-btn:hover { background: var(--accent2); }
+  .lock-error {
+    font-size: 12px;
+    color: #ef4444;
+    margin-top: 10px;
+    min-height: 18px;
+  }
+
+  /* ── 메인 앱 (처음엔 숨김) ── */
+  #app { display: none; }
+
+  /* Header */
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    background: rgba(15,15,15,0.95);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+  }
+  .logo {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+  .logout-btn {
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 11px;
+    color: var(--text3);
+    cursor: pointer;
+    font-family: 'DM Mono', monospace;
+    transition: all 0.15s;
+  }
+  .logout-btn:hover { color: var(--text); border-color: var(--text3); }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .stat-item {
+    flex: 1;
+    min-width: 110px;
+    padding: 1rem 1.25rem;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-item:hover { background: var(--surface); }
+  .stat-item.active { background: var(--surface); }
+  .stat-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+  }
+  .stat-item.active-ds::after { background: var(--ds); }
+  .stat-item.active-be::after { background: var(--be); }
+  .stat-item.active-fe::after { background: var(--fe); }
+  .stat-item.active-ai::after { background: var(--ai); }
+  .stat-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .stat-count { font-size: 22px; font-weight: 700; line-height: 1; margin-bottom: 2px; }
+  .stat-sub { font-size: 11px; color: var(--text2); }
+  .c-all { color: var(--accent); }
+  .c-ds { color: var(--ds); }
+  .c-be { color: var(--be); }
+  .c-fe { color: var(--fe); }
+  .c-ai { color: var(--ai); }
+
+  /* Main layout */
+  .main { display: flex; height: calc(100vh - 56px - 73px); }
+
+  /* Sidebar */
+  .sidebar { width: 240px; border-right: 1px solid var(--border); padding: 1.25rem; overflow-y: auto; flex-shrink: 0; }
+  .sidebar-section { margin-bottom: 1.5rem; }
+  .sidebar-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; font-family: 'DM Mono', monospace; margin-bottom: 8px; }
+  .search-input { width: 100%; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; padding: 8px 12px; font-size: 13px; color: var(--text); font-family: 'Noto Sans KR', sans-serif; outline: none; transition: border-color 0.15s; }
+  .search-input::placeholder { color: var(--text3); }
+  .search-input:focus { border-color: var(--accent); }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .filter-btn { background: none; border: 1px solid transparent; border-radius: 6px; padding: 7px 10px; font-size: 12px; color: var(--text2); cursor: pointer; text-align: left; transition: all 0.12s; font-family: 'Noto Sans KR', sans-serif; display: flex; align-items: center; justify-content: space-between; }
+  .filter-btn:hover { background: var(--surface); color: var(--text); }
+  .filter-btn.active { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+  .filter-count { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text3); }
+
+  /* List */
+  .list-panel { flex: 1; overflow-y: auto; padding: 1.25rem; }
+  .list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .list-count { font-size: 12px; color: var(--text3); font-family: 'DM Mono', monospace; }
+  .candidate-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+  .candidate-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; cursor: pointer; transition: all 0.15s; position: relative; overflow: hidden; }
+  .candidate-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .candidate-card.role-ds::before { background: var(--ds); }
+  .candidate-card.role-be::before { background: var(--be); }
+  .candidate-card.role-fe::before { background: var(--fe); }
+  .candidate-card.role-ai::before { background: var(--ai); }
+  .candidate-card:hover { border-color: var(--border2); background: var(--surface2); transform: translateY(-1px); }
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .candidate-name { font-size: 15px; font-weight: 500; margin-bottom: 3px; }
+  .role-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-family: 'DM Mono', monospace; flex-shrink: 0; }
+  .badge-ds { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+  .badge-be { background: rgba(245,158,11,0.15); color: #fcd34d; }
+  .badge-fe { background: rgba(59,130,246,0.15); color: #93c5fd; }
+  .badge-ai { background: rgba(236,72,153,0.15); color: #f9a8d4; }
+  .card-meta { display: flex; flex-direction: column; gap: 5px; }
+  .meta-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .meta-icon { width: 14px; text-align: center; color: var(--text3); font-size: 11px; }
+  .source-tag { font-size: 10px; padding: 2px 7px; border-radius: 3px; font-family: 'DM Mono', monospace; }
+  .source-tally { background: rgba(0,229,160,0.1); color: var(--accent2); }
+  .source-field { background: rgba(255,255,255,0.05); color: var(--text3); }
+  .avail-tag { font-size: 10px; padding: 2px 7px; border-radius: 3px; }
+  .avail-now { background: rgba(0,229,160,0.1); color: var(--accent); }
+  .avail-later { background: rgba(255,255,255,0.05); color: var(--text3); }
+  .memo-text { font-size: 11px; color: var(--text3); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.5; }
+
+  /* Detail panel */
+  .detail-panel { width: 300px; border-left: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; display: none; }
+  .detail-panel.open { display: block; }
+  .detail-header { padding: 1.25rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+  .detail-close { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; float: right; margin-top: -2px; }
+  .detail-close:hover { color: var(--text); }
+  .detail-name { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .detail-body { padding: 1.25rem; }
+  .detail-section { margin-bottom: 1.5rem; }
+  .detail-section-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.1em; font-family: 'DM Mono', monospace; margin-bottom: 10px; }
+  .detail-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; gap: 12px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-key { color: var(--text3); flex-shrink: 0; }
+  .detail-val { color: var(--text); text-align: right; word-break: break-all; }
+  .detail-val a { color: var(--accent); text-decoration: none; }
+  .detail-val a:hover { text-decoration: underline; }
+  .memo-box { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .empty { text-align: center; padding: 4rem 2rem; color: var(--text3); font-size: 13px; grid-column: 1 / -1; }
+  .loading { text-align: center; padding: 4rem; color: var(--text3); font-family: 'DM Mono', monospace; font-size: 12px; grid-column: 1 / -1; }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- 비밀번호 화면 -->
+<div id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-logo">RETENTICS</div>
+    <div class="lock-icon">🔒</div>
+    <div class="lock-title">인재풀 접근</div>
+    <div class="lock-sub">내부 인원만 접근 가능한 페이지입니다.<br>비밀번호를 입력해주세요.</div>
+    <input class="lock-input" type="password" id="pw-input" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')checkPw()">
+    <button class="lock-btn" onclick="checkPw()">입장하기</button>
+    <div class="lock-error" id="pw-error"></div>
+  </div>
+</div>
+
+<!-- 메인 앱 -->
+<div id="app">
+  <header class="header">
+    <div class="logo">RETENTICS / TALENT POOL</div>
+    <button class="logout-btn" onclick="logout()">잠금 🔒</button>
+  </header>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat-item active" onclick="setFilter('all',this)">
+      <div class="stat-label">전체</div>
+      <div class="stat-count c-all" id="cnt-all">—</div>
+      <div class="stat-sub">명</div>
+    </div>
+    <div class="stat-item" onclick="setFilter('ds',this)">
+      <div class="stat-label">Data Scientist</div>
+      <div class="stat-count c-ds" id="cnt-ds">—</div>
+      <div class="stat-sub">명</div>
+    </div>
+    <div class="stat-item" onclick="setFilter('be',this)">
+      <div class="stat-label">Backend</div>
+      <div class="stat-count c-be" id="cnt-be">—</div>
+      <div class="stat-sub">명</div>
+    </div>
+    <div class="stat-item" onclick="setFilter('fe',this)">
+      <div class="stat-label">Frontend</div>
+      <div class="stat-count c-fe" id="cnt-fe">—</div>
+      <div class="stat-sub">명</div>
+    </div>
+    <div class="stat-item" onclick="setFilter('ai',this)">
+      <div class="stat-label">AI Engineer</div>
+      <div class="stat-count c-ai" id="cnt-ai">—</div>
+      <div class="stat-sub">명</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">검색</div>
+        <input class="search-input" type="text" placeholder="이름, 메모 검색..." id="search-input" oninput="renderList()">
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">가용 시기</div>
+        <div class="filter-group">
+          <button class="filter-btn active" data-avail="all" onclick="setAvail('all',this)"><span>전체</span><span class="filter-count" id="avail-all">—</span></button>
+          <button class="filter-btn" data-avail="즉시" onclick="setAvail('즉시',this)"><span>즉시 가능</span><span class="filter-count" id="avail-now">—</span></button>
+          <button class="filter-btn" data-avail="이내" onclick="setAvail('이내',this)"><span>1~2개월 이내</span><span class="filter-count" id="avail-later">—</span></button>
+          <button class="filter-btn" data-avail="현장" onclick="setAvail('현장',this)"><span>현장 대기</span><span class="filter-count" id="avail-field">—</span></button>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">출처</div>
+        <div class="filter-group">
+          <button class="filter-btn active" data-src="all" onclick="setSrc('all',this)"><span>전체</span></button>
+          <button class="filter-btn" data-src="Tally" onclick="setSrc('Tally',this)"><span>Tally 인재풀</span></button>
+          <button class="filter-btn" data-src="현장" onclick="setSrc('현장',this)"><span>현장 Waiting List</span></button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="list-panel">
+      <div class="list-header">
+        <div class="list-count" id="list-count">로딩 중...</div>
+      </div>
+      <div class="candidate-grid" id="candidate-grid">
+        <div class="loading">데이터 불러오는 중...</div>
+      </div>
+    </div>
+
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-header">
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+        <div class="role-badge" id="detail-badge" style="margin-bottom:8px;display:inline-block"></div>
+        <div class="detail-name" id="detail-name"></div>
+      </div>
+      <div class="detail-body" id="detail-body"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 비밀번호 설정 (여기서 변경하세요) ──
+const PASSWORD = 'retentics2026';
+
+// ── 구글 시트 설정 ──
+const SHEET_ID = '1P2dzqxERIycwFmd76WJMUWG99J3ojgukvgC3ZtSy5QA';
+const SHEETS = [
+  { name: 'Data Scientist', role: 'ds', label: 'DS', range: 'Data Scientist!A3:K50' },
+  { name: '백엔드', role: 'be', label: 'BE', range: '백엔드!A3:K50' },
+  { name: '프론트엔드', role: 'fe', label: 'FE', range: '프론트엔드!A3:K50' },
+  { name: 'AI 엔지니어', role: 'ai', label: 'AI', range: 'AI 엔지니어!A3:K50' },
+];
+const COLS = ['no','name','phone','email','exp','avail','source','resume','interview','result','memo'];
+
+let allCandidates = [];
+let activeFilter = 'all';
+let activeAvail = 'all';
+let activeSrc = 'all';
+
+// ── 비밀번호 로직 ──
+function checkPw() {
+  const val = document.getElementById('pw-input').value;
+  const errEl = document.getElementById('pw-error');
+  if (val === PASSWORD) {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    sessionStorage.setItem('auth', '1');
+    loadAll();
+  } else {
+    errEl.textContent = '비밀번호가 올바르지 않습니다.';
+    const input = document.getElementById('pw-input');
+    input.classList.add('error');
+    input.value = '';
+    setTimeout(() => input.classList.remove('error'), 400);
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('auth');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('lock-screen').style.display = 'flex';
+  document.getElementById('pw-input').value = '';
+  document.getElementById('pw-error').textContent = '';
+}
+
+// 새로고침해도 로그인 유지 (같은 탭/세션 한정)
+if (sessionStorage.getItem('auth') === '1') {
+  document.getElementById('lock-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadAll();
+}
+
+// ── 데이터 로딩 ──
+async function fetchSheet(sheet) {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet.name)}&range=A3:K50`;
+  try {
+    const res = await fetch(csvUrl);
+    const text = await res.text();
+    return parseCSV(text, sheet);
+  } catch(e) { return []; }
+}
+
+function parseCSV(text, sheet) {
+  const lines = text.trim().split('\n');
+  const results = [];
+  for (const line of lines) {
+    const cols = parseCSVLine(line);
+    const no = cols[0]?.trim().replace(/"/g,'');
+    if (!no || isNaN(parseInt(no))) continue;
+    const obj = {};
+    COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    obj.role = sheet.role;
+    obj.roleLabel = sheet.label;
+    obj.roleName = sheet.name;
+    obj.id = sheet.role + '_' + no;
+    results.push(obj);
+  }
+  return results;
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+async function loadAll() {
+  const results = await Promise.all(SHEETS.map(fetchSheet));
+  allCandidates = results.flat();
+  updateCounts();
+  renderList();
+}
+
+function updateCounts() {
+  document.getElementById('cnt-all').textContent = allCandidates.length;
+  document.getElementById('cnt-ds').textContent = allCandidates.filter(c=>c.role==='ds').length;
+  document.getElementById('cnt-be').textContent = allCandidates.filter(c=>c.role==='be').length;
+  document.getElementById('cnt-fe').textContent = allCandidates.filter(c=>c.role==='fe').length;
+  document.getElementById('cnt-ai').textContent = allCandidates.filter(c=>c.role==='ai').length;
+  document.getElementById('avail-all').textContent = allCandidates.length;
+  document.getElementById('avail-now').textContent = allCandidates.filter(c=>c.avail.includes('즉시')).length;
+  document.getElementById('avail-later').textContent = allCandidates.filter(c=>c.avail.includes('이내')).length;
+  document.getElementById('avail-field').textContent = allCandidates.filter(c=>c.source.includes('현장')).length;
+}
+
+function getFiltered() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  return allCandidates.filter(c => {
+    if (activeFilter !== 'all' && c.role !== activeFilter) return false;
+    if (activeAvail !== 'all') {
+      if (activeAvail === '현장' && !c.source.includes('현장')) return false;
+      if (activeAvail === '즉시' && !c.avail.includes('즉시')) return false;
+      if (activeAvail === '이내' && !c.avail.includes('이내')) return false;
+    }
+    if (activeSrc !== 'all' && !c.source.includes(activeSrc)) return false;
+    if (q && !c.name.toLowerCase().includes(q) && !c.memo.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderList() {
+  const filtered = getFiltered();
+  const grid = document.getElementById('candidate-grid');
+  document.getElementById('list-count').textContent = `${filtered.length}명`;
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="empty">조건에 맞는 후보가 없습니다</div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(c => {
+    const isNow = c.avail.includes('즉시');
+    const isTally = c.source.includes('Tally');
+    return `
+    <div class="candidate-card role-${c.role}" onclick="openDetail('${c.id}')">
+      <div class="card-top">
+        <div><div class="candidate-name">${c.name}</div></div>
+        <span class="role-badge badge-${c.role}">${c.roleLabel}</span>
+      </div>
+      <div class="card-meta">
+        <div class="meta-row">
+          <span class="meta-icon">⏱</span>
+          <span>${c.exp || '—'}</span>
+          ${c.avail ? `<span class="avail-tag ${isNow?'avail-now':'avail-later'}">${isNow?'즉시':c.source.includes('현장')?'현장대기':'1~2개월'}</span>` : ''}
+        </div>
+        ${c.email ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${c.email}</span></div>` : ''}
+        <div class="meta-row">
+          <span class="source-tag ${isTally?'source-tally':'source-field'}">${isTally?'Tally':'현장'}</span>
+          ${c.resume ? `<span style="font-size:11px;color:#555">📎 이력서</span>` : ''}
+        </div>
+      </div>
+      ${c.memo ? `<div class="memo-text">${c.memo}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function openDetail(id) {
+  const c = allCandidates.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('detail-badge').className = `role-badge badge-${c.role}`;
+  document.getElementById('detail-badge').textContent = c.roleName;
+  document.getElementById('detail-name').textContent = c.name;
+  const rows = [
+    ['경력', c.exp || '—'],
+    ['연락처', c.phone || '—'],
+    ['이메일', c.email ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
+    ['지원 희망', c.avail || (c.source.includes('현장') ? '현장 대기' : '—')],
+    ['출처', c.source || '—'],
+    ['이력서', c.resume && c.resume !== '이력서 첨부됨' ? `<a href="${c.resume}" target="_blank">링크 열기</a>` : (c.resume || '없음')],
+    ['면접 단계', c.interview || '—'],
+    ['최종 결과', c.result || '—'],
+  ].map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`).join('');
+  document.getElementById('detail-body').innerHTML = `
+    <div class="detail-section">
+      <div class="detail-section-label">기본 정보</div>
+      ${rows}
+    </div>
+    ${c.memo ? `<div class="detail-section"><div class="detail-section-label">메모</div><div class="memo-box">${c.memo}</div></div>` : ''}
+  `;
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+function closeDetail() { document.getElementById('detail-panel').classList.remove('open'); }
+
+function setFilter(val, el) {
+  activeFilter = val;
+  document.querySelectorAll('#stats-bar .stat-item').forEach(e => e.classList.remove('active','active-ds','active-be','active-fe','active-ai'));
+  el.classList.add('active');
+  if (val !== 'all') el.classList.add('active-' + val);
+  renderList();
+}
+function setAvail(val, el) {
+  activeAvail = val;
+  document.querySelectorAll('[data-avail]').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+function setSrc(val, el) {
+  activeSrc = val;
+  document.querySelectorAll('[data-src]').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  renderList();
+}
+</script>
+</body>
+</html>
