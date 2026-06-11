@@ -21,6 +21,8 @@
     --be: #f59e0b;
     --fe: #3b82f6;
     --ai: #ec4899;
+    --coffee: #a16207;
+    --coffee-light: #f59e0b;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -178,6 +180,7 @@
   .stat-item.active-be::after { background: var(--be); }
   .stat-item.active-fe::after { background: var(--fe); }
   .stat-item.active-ai::after { background: var(--ai); }
+  .stat-item.active-coffee::after { background: var(--coffee-light); }
   .stat-label { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
   .stat-count { font-size: 22px; font-weight: 700; line-height: 1; margin-bottom: 2px; }
   .stat-sub { font-size: 11px; color: var(--text2); }
@@ -186,6 +189,7 @@
   .c-be { color: var(--be); }
   .c-fe { color: var(--fe); }
   .c-ai { color: var(--ai); }
+  .c-coffee { color: var(--coffee-light); }
 
   /* Main layout */
   .main { display: flex; height: calc(100vh - 56px - 73px); }
@@ -222,6 +226,16 @@
   .badge-be { background: rgba(245,158,11,0.15); color: #fcd34d; }
   .badge-fe { background: rgba(59,130,246,0.15); color: #93c5fd; }
   .badge-ai { background: rgba(236,72,153,0.15); color: #f9a8d4; }
+  .badge-coffee { background: rgba(245,158,11,0.12); color: #fde68a; }
+  .candidate-card.role-coffee::before { background: var(--coffee-light); }
+
+  /* 커피챗 전용 카드 스타일 */
+  .coffee-schedule { font-size: 11px; color: var(--text2); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.6; }
+  .coffee-schedule .schedule-row { display: flex; align-items: flex-start; gap: 5px; margin-bottom: 3px; }
+  .coffee-schedule .schedule-icon { flex-shrink: 0; }
+  .coffee-done { color: var(--accent2); }
+  .coffee-pending { color: #f59e0b; }
+  .source-coffee { background: rgba(245,158,11,0.1); color: #fde68a; font-size: 10px; padding: 2px 7px; border-radius: 3px; font-family: 'DM Mono', monospace; }
   .card-meta { display: flex; flex-direction: column; gap: 5px; }
   .meta-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
   .meta-icon { width: 14px; text-align: center; color: var(--text3); font-size: 11px; }
@@ -306,6 +320,11 @@
       <div class="stat-count c-ai" id="cnt-ai">—</div>
       <div class="stat-sub">명</div>
     </div>
+    <div class="stat-item" onclick="setFilter('coffee',this)">
+      <div class="stat-label">☕ 커피챗</div>
+      <div class="stat-count c-coffee" id="cnt-coffee">—</div>
+      <div class="stat-sub">명</div>
+    </div>
   </div>
 
   <div class="main">
@@ -329,6 +348,7 @@
           <button class="filter-btn active" data-src="all" onclick="setSrc('all',this)"><span>전체</span></button>
           <button class="filter-btn" data-src="Tally" onclick="setSrc('Tally',this)"><span>Tally 인재풀</span></button>
           <button class="filter-btn" data-src="현장" onclick="setSrc('현장',this)"><span>현장 Waiting List</span></button>
+          <button class="filter-btn" data-src="커피챗" onclick="setSrc('커피챗',this)"><span>☕ 커피챗</span></button>
         </div>
       </div>
     </aside>
@@ -359,22 +379,29 @@ const PASSWORD = 'retentics2026';
 
 // ── 구글 시트 설정 ──
 const SHEET_ID = '1P2dzqxERIycwFmd76WJMUWG99J3ojgukvgC3ZtSy5QA';
-const SHEETS = [
-  { name: 'Data Scientist', role: 'ds', label: 'DS', range: 'Data Scientist!A3:K50' },
-  { name: '백엔드', role: 'be', label: 'BE', range: '백엔드!A3:K50' },
-  { name: '프론트엔드', role: 'fe', label: 'FE', range: '프론트엔드!A3:K50' },
-  { name: 'AI 엔지니어', role: 'ai', label: 'AI', range: 'AI 엔지니어!A3:K50' },
-];
-const COLS = ['no','name','phone','email','exp','avail','source','resume','interview','result','memo'];
 
-let allCandidates = [];
-let activeFilter = 'all';
-let activeAvail = 'all';
-let activeSrc = 'all';
+// 일반 후보 시트 (11컬럼: No,이름,연락처,이메일,경력,지원시기,출처,이력서,면접단계,결과,메모)
+const CANDIDATE_SHEETS = [
+  { name: 'Data Scientist', role: 'ds', label: 'DS' },
+  { name: '백엔드',          role: 'be', label: 'BE' },
+  { name: '프론트엔드',      role: 'fe', label: 'FE' },
+  { name: 'AI 엔지니어',     role: 'ai', label: 'AI' },
+];
+const CANDIDATE_COLS = ['no','name','phone','email','exp','avail','source','resume','interview','result','memo'];
+
+// 커피챗 시트 (9컬럼: No,이름,연락처,이메일,링크드인,비고,출처,1차커피챗,2차커피챗)
+const COFFEE_SHEET = { name: '커피챗', role: 'coffee', label: '☕' };
+const COFFEE_COLS  = ['no','name','phone','email','linkedin','note','source','coffee1','coffee2'];
+
+let allCandidates  = [];
+let coffeeCandidates = [];
+let activeFilter   = 'all';
+let activeAvail    = 'all';
+let activeSrc      = 'all';
 
 // ── 비밀번호 로직 ──
 function checkPw() {
-  const val = document.getElementById('pw-input').value;
+  const val   = document.getElementById('pw-input').value;
   const errEl = document.getElementById('pw-error');
   if (val === PASSWORD) {
     document.getElementById('lock-screen').style.display = 'none';
@@ -398,7 +425,6 @@ function logout() {
   document.getElementById('pw-error').textContent = '';
 }
 
-// 새로고침해도 로그인 유지 (같은 탭/세션 한정)
 if (sessionStorage.getItem('auth') === '1') {
   document.getElementById('lock-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
@@ -406,28 +432,65 @@ if (sessionStorage.getItem('auth') === '1') {
 }
 
 // ── 데이터 로딩 ──
-async function fetchSheet(sheet) {
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet.name)}&range=A3:K50`;
+async function fetchCandidateSheet(sheet) {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheet.name)}&range=A3:K60`;
   try {
-    const res = await fetch(csvUrl);
+    const res  = await fetch(csvUrl);
     const text = await res.text();
-    return parseCSV(text, sheet);
+    return parseCandidateCSV(text, sheet);
   } catch(e) { return []; }
 }
 
-function parseCSV(text, sheet) {
-  const lines = text.trim().split('\n');
+async function fetchCoffeeSheet() {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(COFFEE_SHEET.name)}&range=A2:I50`;
+  try {
+    const res  = await fetch(csvUrl);
+    const text = await res.text();
+    return parseCoffeeCSV(text);
+  } catch(e) { return []; }
+}
+
+function parseCandidateCSV(text, sheet) {
+  const lines   = text.trim().split('\n');
   const results = [];
   for (const line of lines) {
     const cols = parseCSVLine(line);
-    const no = cols[0]?.trim().replace(/"/g,'');
+    const no   = cols[0]?.trim().replace(/"/g,'');
     if (!no || isNaN(parseInt(no))) continue;
-    const obj = {};
-    COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
-    obj.role = sheet.role;
+    const obj  = {};
+    CANDIDATE_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    obj.role      = sheet.role;
     obj.roleLabel = sheet.label;
-    obj.roleName = sheet.name;
-    obj.id = sheet.role + '_' + no;
+    obj.roleName  = sheet.name;
+    obj.id        = sheet.role + '_' + no;
+    obj.isCoffee  = false;
+    results.push(obj);
+  }
+  return results;
+}
+
+function parseCoffeeCSV(text) {
+  const lines   = text.trim().split('\n');
+  const results = [];
+  for (const line of lines) {
+    const cols = parseCSVLine(line);
+    const no   = cols[0]?.trim().replace(/"/g,'');
+    if (!no || isNaN(parseInt(no))) continue;
+    const obj  = {};
+    COFFEE_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    obj.role      = 'coffee';
+    obj.roleLabel = '☕';
+    obj.roleName  = '커피챗';
+    obj.id        = 'coffee_' + no;
+    obj.isCoffee  = true;
+    // 커피챗은 source가 항상 '커피챗'으로 표시
+    obj.source    = '커피챗';
+    obj.exp       = '';
+    obj.avail     = '';
+    obj.resume    = '';
+    obj.interview = '';
+    obj.result    = '';
+    obj.memo      = obj.note || '';
     results.push(obj);
   }
   return results;
@@ -447,89 +510,163 @@ function parseCSVLine(line) {
 }
 
 async function loadAll() {
-  const results = await Promise.all(SHEETS.map(fetchSheet));
-  allCandidates = results.flat();
+  document.getElementById('candidate-grid').innerHTML = '<div class="loading">데이터 불러오는 중...</div>';
+
+  const [candidateResults, coffeeResults] = await Promise.all([
+    Promise.all(CANDIDATE_SHEETS.map(fetchCandidateSheet)),
+    fetchCoffeeSheet(),
+  ]);
+
+  allCandidates    = candidateResults.flat();
+  coffeeCandidates = coffeeResults;
+
   updateCounts();
   renderList();
 }
 
+function getAllVisible() {
+  return [...allCandidates, ...coffeeCandidates];
+}
+
 function updateCounts() {
-  document.getElementById('cnt-all').textContent = allCandidates.length;
-  document.getElementById('cnt-ds').textContent = allCandidates.filter(c=>c.role==='ds').length;
-  document.getElementById('cnt-be').textContent = allCandidates.filter(c=>c.role==='be').length;
-  document.getElementById('cnt-fe').textContent = allCandidates.filter(c=>c.role==='fe').length;
-  document.getElementById('cnt-ai').textContent = allCandidates.filter(c=>c.role==='ai').length;
-  document.getElementById('avail-all').textContent = allCandidates.length;
-  document.getElementById('avail-now').textContent = allCandidates.filter(c=>c.avail.includes('즉시')).length;
+  const all = getAllVisible();
+  document.getElementById('cnt-all').textContent    = all.length;
+  document.getElementById('cnt-ds').textContent     = allCandidates.filter(c=>c.role==='ds').length;
+  document.getElementById('cnt-be').textContent     = allCandidates.filter(c=>c.role==='be').length;
+  document.getElementById('cnt-fe').textContent     = allCandidates.filter(c=>c.role==='fe').length;
+  document.getElementById('cnt-ai').textContent     = allCandidates.filter(c=>c.role==='ai').length;
+  document.getElementById('cnt-coffee').textContent = coffeeCandidates.length;
+
+  document.getElementById('avail-all').textContent   = all.length;
+  document.getElementById('avail-now').textContent   = allCandidates.filter(c=>c.avail.includes('즉시')).length;
   document.getElementById('avail-later').textContent = allCandidates.filter(c=>c.avail.includes('이내')).length;
   document.getElementById('avail-field').textContent = allCandidates.filter(c=>c.source.includes('현장')).length;
 }
 
 function getFiltered() {
-  const q = document.getElementById('search-input').value.toLowerCase().trim();
-  return allCandidates.filter(c => {
+  const q    = document.getElementById('search-input').value.toLowerCase().trim();
+  const all  = getAllVisible();
+
+  return all.filter(c => {
     if (activeFilter !== 'all' && c.role !== activeFilter) return false;
+
+    // 가용 시기 필터: 커피챗은 해당 없으므로 시기 필터 적용 시 제외
     if (activeAvail !== 'all') {
+      if (c.isCoffee) return false;
       if (activeAvail === '현장' && !c.source.includes('현장')) return false;
-      if (activeAvail === '즉시' && !c.avail.includes('즉시')) return false;
-      if (activeAvail === '이내' && !c.avail.includes('이내')) return false;
+      if (activeAvail === '즉시' && !c.avail.includes('즉시'))  return false;
+      if (activeAvail === '이내' && !c.avail.includes('이내'))  return false;
     }
+
+    // 출처 필터
     if (activeSrc !== 'all' && !c.source.includes(activeSrc)) return false;
-    if (q && !c.name.toLowerCase().includes(q) && !c.memo.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false;
+
+    // 검색: 이름, 메모, 이메일, 링크드인(커피챗)
+    if (q) {
+      const searchable = [c.name, c.memo, c.email, c.linkedin||''].join(' ').toLowerCase();
+      if (!searchable.includes(q)) return false;
+    }
+
     return true;
   });
 }
 
 function renderList() {
   const filtered = getFiltered();
-  const grid = document.getElementById('candidate-grid');
+  const grid     = document.getElementById('candidate-grid');
   document.getElementById('list-count').textContent = `${filtered.length}명`;
+
   if (filtered.length === 0) {
     grid.innerHTML = '<div class="empty">조건에 맞는 후보가 없습니다</div>';
     return;
   }
+
   grid.innerHTML = filtered.map(c => {
-    const isNow = c.avail.includes('즉시');
-    const isTally = c.source.includes('Tally');
-    return `
-    <div class="candidate-card role-${c.role}" onclick="openDetail('${c.id}')">
-      <div class="card-top">
-        <div><div class="candidate-name">${c.name}</div></div>
-        <span class="role-badge badge-${c.role}">${c.roleLabel}</span>
-      </div>
-      <div class="card-meta">
-        <div class="meta-row">
-          <span class="meta-icon">⏱</span>
-          <span>${c.exp || '—'}</span>
-          ${c.avail ? `<span class="avail-tag ${isNow?'avail-now':'avail-later'}">${isNow?'즉시':c.source.includes('현장')?'현장대기':'1~2개월'}</span>` : ''}
-        </div>
-        ${c.email ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${c.email}</span></div>` : ''}
-        <div class="meta-row">
-          <span class="source-tag ${isTally?'source-tally':'source-field'}">${isTally?'Tally':'현장'}</span>
-          ${c.resume ? `<span style="font-size:11px;color:#555">📎 이력서</span>` : ''}
-        </div>
-      </div>
-      ${c.memo ? `<div class="memo-text">${c.memo}</div>` : ''}
-    </div>`;
+    if (c.isCoffee) return renderCoffeeCard(c);
+    return renderCandidateCard(c);
   }).join('');
 }
 
+function renderCandidateCard(c) {
+  const isNow   = c.avail.includes('즉시');
+  const isTally = c.source.includes('Tally');
+  return `
+  <div class="candidate-card role-${c.role}" onclick="openDetail('${c.id}')">
+    <div class="card-top">
+      <div><div class="candidate-name">${c.name}</div></div>
+      <span class="role-badge badge-${c.role}">${c.roleLabel}</span>
+    </div>
+    <div class="card-meta">
+      <div class="meta-row">
+        <span class="meta-icon">⏱</span>
+        <span>${c.exp || '—'}</span>
+        ${c.avail ? `<span class="avail-tag ${isNow?'avail-now':'avail-later'}">${isNow?'즉시':c.source.includes('현장')?'현장대기':'1~2개월'}</span>` : ''}
+      </div>
+      ${c.email ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${c.email}</span></div>` : ''}
+      <div class="meta-row">
+        <span class="source-tag ${isTally?'source-tally':'source-field'}">${isTally?'Tally':'현장'}</span>
+        ${c.resume ? `<span style="font-size:11px;color:#555">📎 이력서</span>` : ''}
+      </div>
+    </div>
+    ${c.memo ? `<div class="memo-text">${c.memo}</div>` : ''}
+  </div>`;
+}
+
+function renderCoffeeCard(c) {
+  const has1 = c.coffee1 && c.coffee1 !== '—';
+  const has2 = c.coffee2 && c.coffee2 !== '—';
+  const isPending2 = has2 && c.coffee2.includes('조율');
+
+  return `
+  <div class="candidate-card role-coffee" onclick="openDetail('${c.id}')">
+    <div class="card-top">
+      <div><div class="candidate-name">${c.name}</div></div>
+      <span class="role-badge badge-coffee">☕</span>
+    </div>
+    <div class="card-meta">
+      ${c.email && c.email !== '—' ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${c.email}</span></div>` : ''}
+      <div class="meta-row">
+        <span class="source-coffee">커피챗</span>
+      </div>
+    </div>
+    <div class="coffee-schedule">
+      ${has1 ? `<div class="schedule-row"><span class="schedule-icon">☕</span><span class="coffee-done">1차: ${c.coffee1}</span></div>` : '<div class="schedule-row"><span class="schedule-icon">☕</span><span style="color:var(--text3)">1차 일정 미정</span></div>'}
+      ${has2 ? `<div class="schedule-row"><span class="schedule-icon">☕</span><span class="${isPending2?'coffee-pending':'coffee-done'}">2차: ${c.coffee2}</span></div>` : ''}
+    </div>
+  </div>`;
+}
+
 function openDetail(id) {
-  const c = allCandidates.find(x => x.id === id);
+  const all = getAllVisible();
+  const c   = all.find(x => x.id === id);
   if (!c) return;
-  document.getElementById('detail-badge').className = `role-badge badge-${c.role}`;
+
+  document.getElementById('detail-badge').className   = `role-badge badge-${c.role}`;
   document.getElementById('detail-badge').textContent = c.roleName;
-  document.getElementById('detail-name').textContent = c.name;
-  const rows = [
-    ['경력', c.exp || '—'],
-    ['연락처', c.phone || '—'],
-    ['이메일', c.email ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
-    ['지원 희망', c.avail || (c.source.includes('현장') ? '현장 대기' : '—')],
-    ['출처', c.source || '—'],
-    ['이력서', c.resume && c.resume !== '이력서 첨부됨' ? `<a href="${c.resume}" target="_blank">링크 열기</a>` : (c.resume || '없음')],
-    ['면접 단계', c.interview || '—'],
-    ['최종 결과', c.result || '—'],
-  ].map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`).join('');
+  document.getElementById('detail-name').textContent  = c.name;
+
+  let rows;
+  if (c.isCoffee) {
+    rows = [
+      ['연락처',     c.phone   || '—'],
+      ['이메일',     c.email && c.email !== '—' ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
+      ['링크드인',   c.linkedin ? `<a href="${c.linkedin}" target="_blank">프로필 보기</a>` : '—'],
+      ['1차 커피챗', c.coffee1 || '—'],
+      ['2차 커피챗', c.coffee2 || '—'],
+    ].map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`).join('');
+  } else {
+    rows = [
+      ['경력',     c.exp    || '—'],
+      ['연락처',   c.phone  || '—'],
+      ['이메일',   c.email  ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
+      ['지원 희망', c.avail || (c.source.includes('현장') ? '현장 대기' : '—')],
+      ['출처',     c.source || '—'],
+      ['이력서',   c.resume && c.resume !== '이력서 첨부됨' ? `<a href="${c.resume}" target="_blank">링크 열기</a>` : (c.resume || '없음')],
+      ['면접 단계', c.interview || '—'],
+      ['최종 결과', c.result    || '—'],
+    ].map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`).join('');
+  }
+
   document.getElementById('detail-body').innerHTML = `
     <div class="detail-section">
       <div class="detail-section-label">기본 정보</div>
@@ -544,7 +681,7 @@ function closeDetail() { document.getElementById('detail-panel').classList.remov
 
 function setFilter(val, el) {
   activeFilter = val;
-  document.querySelectorAll('#stats-bar .stat-item').forEach(e => e.classList.remove('active','active-ds','active-be','active-fe','active-ai'));
+  document.querySelectorAll('#stats-bar .stat-item').forEach(e => e.classList.remove('active','active-ds','active-be','active-fe','active-ai','active-coffee'));
   el.classList.add('active');
   if (val !== 'all') el.classList.add('active-' + val);
   renderList();
