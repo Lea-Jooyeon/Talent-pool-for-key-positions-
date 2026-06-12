@@ -242,6 +242,9 @@
   .source-tag { font-size: 10px; padding: 2px 7px; border-radius: 3px; font-family: 'DM Mono', monospace; }
   .source-tally { background: rgba(0,229,160,0.1); color: var(--accent2); }
   .source-field { background: rgba(255,255,255,0.05); color: var(--text3); }
+  .source-linkedin { background: rgba(59,130,246,0.1); color: #93c5fd; }
+  .src-parent { font-weight: 500; color: var(--text) !important; margin-top: 4px; }
+  .src-child { padding-left: 18px !important; font-size: 11px !important; }
   .avail-tag { font-size: 10px; padding: 2px 7px; border-radius: 3px; }
   .avail-now { background: rgba(0,229,160,0.1); color: var(--accent); }
   .avail-later { background: rgba(255,255,255,0.05); color: var(--text3); }
@@ -334,21 +337,26 @@
         <input class="search-input" type="text" placeholder="이름, 메모 검색..." id="search-input" oninput="renderList()">
       </div>
       <div class="sidebar-section">
-        <div class="sidebar-label">가용 시기</div>
+        <div class="sidebar-label">포지션</div>
         <div class="filter-group">
           <button class="filter-btn active" data-avail="all" onclick="setAvail('all',this)"><span>전체</span><span class="filter-count" id="avail-all">—</span></button>
-          <button class="filter-btn" data-avail="즉시" onclick="setAvail('즉시',this)"><span>즉시 가능</span><span class="filter-count" id="avail-now">—</span></button>
-          <button class="filter-btn" data-avail="이내" onclick="setAvail('이내',this)"><span>1~2개월 이내</span><span class="filter-count" id="avail-later">—</span></button>
-          <button class="filter-btn" data-avail="현장" onclick="setAvail('현장',this)"><span>현장 대기</span><span class="filter-count" id="avail-field">—</span></button>
+          <button class="filter-btn" data-avail="ds" onclick="setAvail('ds',this)"><span>🔬 Data Scientist</span><span class="filter-count" id="avail-ds">—</span></button>
+          <button class="filter-btn" data-avail="be" onclick="setAvail('be',this)"><span>⚙️ Backend</span><span class="filter-count" id="avail-be">—</span></button>
+          <button class="filter-btn" data-avail="fe" onclick="setAvail('fe',this)"><span>🖥️ Frontend</span><span class="filter-count" id="avail-fe">—</span></button>
+          <button class="filter-btn" data-avail="ai" onclick="setAvail('ai',this)"><span>🤖 AI Engineer</span><span class="filter-count" id="avail-ai">—</span></button>
         </div>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-label">출처</div>
         <div class="filter-group">
           <button class="filter-btn active" data-src="all" onclick="setSrc('all',this)"><span>전체</span></button>
-          <button class="filter-btn" data-src="Tally" onclick="setSrc('Tally',this)"><span>Tally 인재풀</span></button>
-          <button class="filter-btn" data-src="현장" onclick="setSrc('현장',this)"><span>현장 Waiting List</span></button>
-          <button class="filter-btn" data-src="커피챗" onclick="setSrc('커피챗',this)"><span>☕ 커피챗</span></button>
+          <!-- 그룹바이 채용 박람회 (상위) -->
+          <button class="filter-btn src-parent" data-src="groupby" onclick="setSrc('groupby',this)"><span>📋 그룹바이 채용 박람회</span></button>
+          <!-- 그룹바이 하위 항목 -->
+          <button class="filter-btn src-child" data-src="Tally" onclick="setSrc('Tally',this)"><span>└ Tally 인재풀</span></button>
+          <button class="filter-btn src-child" data-src="현장" onclick="setSrc('현장',this)"><span>└ 현장 Waiting List</span></button>
+          <!-- 링크드인 아웃바운드 (독립 섹션) -->
+          <button class="filter-btn src-parent" data-src="linkedin" onclick="setSrc('linkedin',this)"><span>🔗 링크드인 아웃바운드</span></button>
         </div>
       </div>
     </aside>
@@ -389,9 +397,9 @@ const CANDIDATE_SHEETS = [
 ];
 const CANDIDATE_COLS = ['no','name','phone','email','exp','avail','source','resume','interview','result','memo'];
 
-// 커피챗 시트 (9컬럼: No,이름,연락처,이메일,링크드인,비고,출처,1차커피챗,2차커피챗)
+// 커피챗 시트 (10컬럼: No,이름,포지션,연락처,이메일,링크드인,노션미팅노트,출처,1차커피챗,2차커피챗)
 const COFFEE_SHEET = { name: '커피챗', role: 'coffee', label: '☕' };
-const COFFEE_COLS  = ['no','name','phone','email','linkedin','note','source','coffee1','coffee2'];
+const COFFEE_COLS  = ['no','name','position','phone','email','linkedin','note','source','coffee1','coffee2'];
 
 let allCandidates  = [];
 let coffeeCandidates = [];
@@ -442,7 +450,7 @@ async function fetchCandidateSheet(sheet) {
 }
 
 async function fetchCoffeeSheet() {
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(COFFEE_SHEET.name)}&range=A2:I50`;
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(COFFEE_SHEET.name)}&range=A2:J50`;
   try {
     const res  = await fetch(csvUrl);
     const text = await res.text();
@@ -537,10 +545,12 @@ function updateCounts() {
   document.getElementById('cnt-ai').textContent     = allCandidates.filter(c=>c.role==='ai').length;
   document.getElementById('cnt-coffee').textContent = coffeeCandidates.length;
 
-  document.getElementById('avail-all').textContent   = all.length;
-  document.getElementById('avail-now').textContent   = allCandidates.filter(c=>c.avail.includes('즉시')).length;
-  document.getElementById('avail-later').textContent = allCandidates.filter(c=>c.avail.includes('이내')).length;
-  document.getElementById('avail-field').textContent = allCandidates.filter(c=>c.source.includes('현장')).length;
+  // 포지션 필터 카운트
+  document.getElementById('avail-all').textContent = all.length;
+  document.getElementById('avail-ds').textContent  = allCandidates.filter(c=>c.role==='ds').length;
+  document.getElementById('avail-be').textContent  = allCandidates.filter(c=>c.role==='be').length;
+  document.getElementById('avail-fe').textContent  = allCandidates.filter(c=>c.role==='fe').length;
+  document.getElementById('avail-ai').textContent  = allCandidates.filter(c=>c.role==='ai').length;
 }
 
 function getFiltered() {
@@ -550,16 +560,24 @@ function getFiltered() {
   return all.filter(c => {
     if (activeFilter !== 'all' && c.role !== activeFilter) return false;
 
-    // 가용 시기 필터: 커피챗은 해당 없으므로 시기 필터 적용 시 제외
+    // 포지션 필터 (사이드바)
     if (activeAvail !== 'all') {
       if (c.isCoffee) return false;
-      if (activeAvail === '현장' && !c.source.includes('현장')) return false;
-      if (activeAvail === '즉시' && !c.avail.includes('즉시'))  return false;
-      if (activeAvail === '이내' && !c.avail.includes('이내'))  return false;
+      if (c.role !== activeAvail) return false;
     }
 
     // 출처 필터
-    if (activeSrc !== 'all' && !c.source.includes(activeSrc)) return false;
+    if (activeSrc !== 'all') {
+      if (activeSrc === 'groupby') {
+        // 그룹바이 = Tally + 현장 모두 포함
+        if (!c.source.includes('Tally') && !c.source.includes('현장')) return false;
+      } else if (activeSrc === 'linkedin') {
+        // 링크드인 아웃바운드 = 커피챗
+        if (!c.isCoffee) return false;
+      } else {
+        if (!c.source.includes(activeSrc)) return false;
+      }
+    }
 
     // 검색: 이름, 메모, 이메일, 링크드인(커피챗)
     if (q) {
@@ -616,17 +634,22 @@ function renderCoffeeCard(c) {
   const has1 = c.coffee1 && c.coffee1 !== '—';
   const has2 = c.coffee2 && c.coffee2 !== '—';
   const isPending2 = has2 && c.coffee2.includes('조율');
+  // 커피챗 시트의 포지션 컬럼 활용 (없으면 '데이터 사이언티스트' 기본값)
+  const posLabel = c.position || c.note || '데이터 사이언티스트';
 
   return `
   <div class="candidate-card role-coffee" onclick="openDetail('${c.id}')">
     <div class="card-top">
-      <div><div class="candidate-name">${c.name}</div></div>
+      <div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;font-family:'DM Mono',monospace">${posLabel}</div>
+        <div class="candidate-name">${c.name}</div>
+      </div>
       <span class="role-badge badge-coffee">☕</span>
     </div>
     <div class="card-meta">
-      ${c.email && c.email !== '—' ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${c.email}</span></div>` : ''}
+      ${c.phone && c.phone !== '—' ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${c.phone}</span></div>` : ''}
       <div class="meta-row">
-        <span class="source-coffee">커피챗</span>
+        <span class="source-linkedin">링크드인 아웃바운드</span>
       </div>
     </div>
     <div class="coffee-schedule">
