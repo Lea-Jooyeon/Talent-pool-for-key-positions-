@@ -243,6 +243,11 @@
   .source-tally { background: rgba(0,229,160,0.1); color: var(--accent2); }
   .source-field { background: rgba(255,255,255,0.05); color: var(--text3); }
   .source-linkedin { background: rgba(59,130,246,0.1); color: #93c5fd; }
+  .source-qr { background: rgba(168,85,247,0.1); color: #d8b4fe; }
+  .resume-dl-btn { font-size: 10px; padding: 2px 7px; border-radius: 3px; background: rgba(0,229,160,0.1); color: var(--accent); text-decoration: none; font-family: 'DM Mono', monospace; }
+  .resume-dl-btn:hover { background: rgba(0,229,160,0.2); }
+  .resume-dl-link { color: var(--accent); text-decoration: none; }
+  .resume-dl-link:hover { text-decoration: underline; }
   .src-parent { font-weight: 500; color: var(--text) !important; margin-top: 4px; }
   .src-child { padding-left: 18px !important; font-size: 11px !important; }
   .avail-tag { font-size: 10px; padding: 2px 7px; border-radius: 3px; }
@@ -355,6 +360,7 @@
           <!-- 그룹바이 하위 항목 -->
           <button class="filter-btn src-child" data-src="Tally" onclick="setSrc('Tally',this)"><span>└ Tally 인재풀</span></button>
           <button class="filter-btn src-child" data-src="현장" onclick="setSrc('현장',this)"><span>└ 현장 Waiting List</span></button>
+          <button class="filter-btn src-child" data-src="QR" onclick="setSrc('QR',this)"><span>└ QR 리더기</span></button>
           <!-- 링크드인 아웃바운드 (독립 섹션) -->
           <button class="filter-btn src-parent" data-src="linkedin" onclick="setSrc('linkedin',this)"><span>🔗 링크드인 아웃바운드</span></button>
         </div>
@@ -388,6 +394,9 @@ const PASSWORD = 'retentics2026';
 // ── 구글 시트 설정 ──
 const SHEET_ID = '1P2dzqxERIycwFmd76WJMUWG99J3ojgukvgC3ZtSy5QA';
 
+// 그룹바이 채용 박람회 시트 ID (2026년 1월)
+const GROUPBY_SHEET_ID = '1tQ8XrJzIOojiCGE0gLjyXEiBTw2b5BKCT-Pd6bFLJeE';
+
 // 일반 후보 시트 (11컬럼: No,이름,연락처,이메일,경력,지원시기,출처,이력서,면접단계,결과,메모)
 const CANDIDATE_SHEETS = [
   { name: 'Data Scientist', role: 'ds', label: 'DS' },
@@ -400,6 +409,15 @@ const CANDIDATE_COLS = ['no','name','phone','email','exp','avail','source','resu
 // 커피챗 시트 (10컬럼: No,이름,포지션,연락처,이메일,링크드인,노션미팅노트,출처,1차커피챗,2차커피챗)
 const COFFEE_SHEET = { name: '커피챗', role: 'coffee', label: '☕' };
 const COFFEE_COLS  = ['no','name','position','phone','email','linkedin','note','source','coffee1','coffee2'];
+
+// 그룹바이 Tally 시트 컬럼: submitted_at,이름,연락처,이메일,포지션,경력,지원시기,이력서업로드,이력서링크
+const GROUPBY_TALLY_COLS = ['submitted_at','name','phone','email','position','exp','avail','resume_file','resume_link'];
+// 그룹바이 현장 시트 컬럼: no,이름,직군,경력,연락처,문자발송,이력서수령,비고
+const GROUPBY_FIELD_COLS = ['no','name','position','exp','phone','sms','resume_recv','memo'];
+// 그룹바이 QR 시트 컬럼: 부스,이름,이메일,연락처,직군,경력,profileId,프로필링크,방문시각
+const GROUPBY_QR_COLS = ['booth','name','email','phone','position','exp','profile_id','profile_link','visited_at'];
+
+let groupbyCandidates = [];
 
 let allCandidates  = [];
 let coffeeCandidates = [];
@@ -456,6 +474,151 @@ async function fetchCoffeeSheet() {
     const text = await res.text();
     return parseCoffeeCSV(text);
   } catch(e) { return []; }
+}
+
+// 그룹바이 Tally 시트 (제출일 + 이력서 링크 포함)
+async function fetchGroupbyTally() {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=0&range=A2:I100`;
+  try {
+    const res  = await fetch(csvUrl);
+    const text = await res.text();
+    return parseGroupbyTallyCSV(text);
+  } catch(e) { return []; }
+}
+
+// 그룹바이 현장 Waiting List
+async function fetchGroupbyField() {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=1&range=A2:H50`;
+  try {
+    const res  = await fetch(csvUrl);
+    const text = await res.text();
+    return parseGroupbyFieldCSV(text);
+  } catch(e) { return []; }
+}
+
+// 그룹바이 QR 리더기
+async function fetchGroupbyQR() {
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=2&range=A2:I100`;
+  try {
+    const res  = await fetch(csvUrl);
+    const text = await res.text();
+    return parseGroupbyQRCSV(text);
+  } catch(e) { return []; }
+}
+
+function parseGroupbyTallyCSV(text) {
+  const lines = text.trim().split('\n');
+  const results = [];
+  let idx = 0;
+  for (const line of lines) {
+    const cols = parseCSVLine(line);
+    const name = (cols[1]||'').trim().replace(/^"|"$/g,'');
+    if (!name) continue;
+    idx++;
+    const obj = {};
+    GROUPBY_TALLY_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    // 이력서: 파일 업로드 우선, 없으면 링크
+    obj.resume = obj.resume_file || obj.resume_link || '';
+    obj.source = 'Tally 인재풀';
+    obj.isGroupby = true;
+    obj.groupbyType = 'tally';
+    // 포지션 → role 매핑
+    obj.role = mapPositionToRole(obj.position);
+    obj.roleLabel = getRoleLabel(obj.role);
+    obj.roleName  = getRoleName(obj.role);
+    obj.id = 'gb_tally_' + idx;
+    obj.isCoffee = false;
+    obj.interview = '';
+    obj.result = '';
+    obj.memo = '';
+    // 제출일 파싱 (2026-01-10 2:14 형식)
+    obj.submittedAt = obj.submitted_at ? obj.submitted_at.split(' ')[0] : '';
+    results.push(obj);
+  }
+  return results;
+}
+
+function parseGroupbyFieldCSV(text) {
+  const lines = text.trim().split('\n');
+  const results = [];
+  let idx = 0;
+  for (const line of lines) {
+    const cols = parseCSVLine(line);
+    const no = (cols[0]||'').trim().replace(/^"|"$/g,'');
+    if (!no || isNaN(parseInt(no))) continue;
+    idx++;
+    const obj = {};
+    GROUPBY_FIELD_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    obj.resume = '';
+    obj.source = '현장 Waiting List';
+    obj.isGroupby = true;
+    obj.groupbyType = 'field';
+    obj.role = mapPositionToRole(obj.position);
+    obj.roleLabel = getRoleLabel(obj.role);
+    obj.roleName  = getRoleName(obj.role);
+    obj.id = 'gb_field_' + idx;
+    obj.isCoffee = false;
+    obj.avail = '';
+    obj.email = '';
+    obj.interview = '';
+    obj.result = '';
+    obj.submittedAt = '';
+    results.push(obj);
+  }
+  return results;
+}
+
+function parseGroupbyQRCSV(text) {
+  const lines = text.trim().split('\n');
+  const results = [];
+  const seen = new Set();
+  let idx = 0;
+  for (const line of lines) {
+    const cols = parseCSVLine(line);
+    const name = (cols[1]||'').trim().replace(/^"|"$/g,'');
+    if (!name) continue;
+    // 중복 제거 (이름+이메일 기준)
+    const key = name + (cols[2]||'');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    idx++;
+    const obj = {};
+    GROUPBY_QR_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    obj.name   = name;
+    obj.resume = obj.profile_link || '';
+    obj.source = 'QR 리더기';
+    obj.isGroupby = true;
+    obj.groupbyType = 'qr';
+    obj.role = mapPositionToRole(obj.position);
+    obj.roleLabel = getRoleLabel(obj.role);
+    obj.roleName  = getRoleName(obj.role);
+    obj.id = 'gb_qr_' + idx;
+    obj.isCoffee = false;
+    obj.avail = '';
+    obj.interview = '';
+    obj.result = '';
+    obj.memo = '';
+    // 방문시각 날짜만
+    obj.submittedAt = obj.visited_at ? obj.visited_at.split(' ')[0] : '';
+    results.push(obj);
+  }
+  return results;
+}
+
+function mapPositionToRole(pos) {
+  if (!pos) return 'etc';
+  const p = pos.toLowerCase();
+  if (p.includes('데이터') || p.includes('data') || p.includes('머신') || p.includes('ml') || p.includes('분석')) return 'ds';
+  if (p.includes('백엔드') || p.includes('backend') || p.includes('be') || p.includes('devops') || p.includes('풀스택') || p.includes('full')) return 'be';
+  if (p.includes('프론트') || p.includes('front') || p.includes('fe')) return 'fe';
+  if (p.includes('ai') || p.includes('인공지능') || p.includes('agent')) return 'ai';
+  return 'etc';
+}
+function getRoleLabel(role) {
+  return {ds:'DS', be:'BE', fe:'FE', ai:'AI', etc:'기타'}[role] || '기타';
+}
+function getRoleName(role) {
+  return {ds:'Data Scientist', be:'백엔드', fe:'프론트엔드', ai:'AI 엔지니어', etc:'기타'}[role] || '기타';
 }
 
 function parseCandidateCSV(text, sheet) {
@@ -520,20 +683,24 @@ function parseCSVLine(line) {
 async function loadAll() {
   document.getElementById('candidate-grid').innerHTML = '<div class="loading">데이터 불러오는 중...</div>';
 
-  const [candidateResults, coffeeResults] = await Promise.all([
+  const [candidateResults, coffeeResults, gbTally, gbField, gbQR] = await Promise.all([
     Promise.all(CANDIDATE_SHEETS.map(fetchCandidateSheet)),
     fetchCoffeeSheet(),
+    fetchGroupbyTally(),
+    fetchGroupbyField(),
+    fetchGroupbyQR(),
   ]);
 
   allCandidates    = candidateResults.flat();
   coffeeCandidates = coffeeResults;
+  groupbyCandidates = [...gbTally, ...gbField, ...gbQR];
 
   updateCounts();
   renderList();
 }
 
 function getAllVisible() {
-  return [...allCandidates, ...coffeeCandidates];
+  return [...allCandidates, ...coffeeCandidates, ...groupbyCandidates];
 }
 
 function updateCounts() {
@@ -560,20 +727,22 @@ function getFiltered() {
   return all.filter(c => {
     if (activeFilter !== 'all' && c.role !== activeFilter) return false;
 
-    // 포지션 필터 (사이드바)
-    if (activeAvail !== 'all') {
-      if (c.isCoffee) return false;
-      if (c.role !== activeAvail) return false;
-    }
+    // 포지션 필터 (사이드바) - activeFilter와 연동되므로 커피챗만 제외
+    if (activeAvail !== 'all' && c.isCoffee) return false;
 
     // 출처 필터
     if (activeSrc !== 'all') {
       if (activeSrc === 'groupby') {
-        // 그룹바이 = Tally + 현장 모두 포함
-        if (!c.source.includes('Tally') && !c.source.includes('현장')) return false;
+        // 그룹바이 전체 = Tally + 현장 + QR
+        if (!c.isGroupby && !c.source.includes('Tally') && !c.source.includes('현장')) return false;
+      } else if (activeSrc === 'Tally') {
+        if (!c.source.includes('Tally')) return false;
+      } else if (activeSrc === '현장') {
+        if (!c.source.includes('현장')) return false;
+      } else if (activeSrc === 'QR') {
+        if (!c.source.includes('QR')) return false;
       } else if (activeSrc === 'linkedin') {
-        // 링크드인 아웃바운드 = 커피챗
-        if (!c.isCoffee) return false;
+        if (!c.source.includes('링크드인')) return false;
       } else {
         if (!c.source.includes(activeSrc)) return false;
       }
@@ -601,6 +770,7 @@ function renderList() {
 
   grid.innerHTML = filtered.map(c => {
     if (c.isCoffee) return renderCoffeeCard(c);
+    if (c.isGroupby) return renderGroupbyCard(c);
     return renderCandidateCard(c);
   }).join('');
 }
@@ -659,6 +829,29 @@ function renderCoffeeCard(c) {
   </div>`;
 }
 
+function renderGroupbyCard(c) {
+  const typeLabel = c.groupbyType === 'tally' ? 'Tally 인재풀' : c.groupbyType === 'field' ? '현장 대기' : 'QR 리더기';
+  const typeColor = c.groupbyType === 'tally' ? 'source-tally' : c.groupbyType === 'field' ? 'source-field' : 'source-qr';
+  const hasResume = c.resume && c.resume !== '—' && c.resume !== '';
+  return `
+  <div class="candidate-card role-${c.role}" onclick="openDetail('${c.id}')">
+    <div class="card-top">
+      <div><div class="candidate-name">${c.name}</div></div>
+      <span class="role-badge badge-${c.role}">${c.roleLabel}</span>
+    </div>
+    <div class="card-meta">
+      ${c.phone ? `<div class="meta-row"><span class="meta-icon">📞</span><span>${c.phone}</span></div>` : ''}
+      ${c.email ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${c.email}</span></div>` : ''}
+      <div class="meta-row">
+        <span class="source-tag ${typeColor}">${typeLabel}</span>
+        ${hasResume ? `<a href="${c.resume}" target="_blank" onclick="event.stopPropagation()" class="resume-dl-btn">📎 이력서</a>` : ''}
+      </div>
+      ${c.submittedAt ? `<div class="meta-row"><span class="meta-icon">📅</span><span style="font-size:11px;color:var(--text3)">${c.submittedAt}</span></div>` : ''}
+    </div>
+    ${c.memo ? `<div class="memo-text">${c.memo}</div>` : ''}
+  </div>`;
+}
+
 function openDetail(id) {
   const all = getAllVisible();
   const c   = all.find(x => x.id === id);
@@ -671,11 +864,26 @@ function openDetail(id) {
   let rows;
   if (c.isCoffee) {
     rows = [
+      ['포지션',     c.position || '—'],
       ['연락처',     c.phone   || '—'],
       ['이메일',     c.email && c.email !== '—' ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
       ['링크드인',   c.linkedin ? `<a href="${c.linkedin}" target="_blank">프로필 보기</a>` : '—'],
       ['1차 커피챗', c.coffee1 || '—'],
       ['2차 커피챗', c.coffee2 || '—'],
+    ].map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`).join('');
+  } else if (c.isGroupby) {
+    const resumeVal = c.resume ? `<a href="${c.resume}" target="_blank" class="resume-dl-link">📎 이력서 다운로드</a>` : '없음';
+    const profileVal = c.profile_link ? `<a href="${c.profile_link}" target="_blank">그룹바이 프로필</a>` : '—';
+    rows = [
+      ['포지션',      c.position || '—'],
+      ['경력',        c.exp || '—'],
+      ['연락처',      c.phone  || '—'],
+      ['이메일',      c.email  ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
+      ['지원 희망',   c.avail  || '—'],
+      ['출처',        c.source || '—'],
+      ['이력서',      resumeVal],
+      c.groupbyType === 'qr' ? ['그룹바이 프로필', profileVal] : ['비고', c.memo || '—'],
+      ['제출/방문일', c.submittedAt || '—'],
     ].map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`).join('');
   } else {
     rows = [
@@ -713,6 +921,21 @@ function setAvail(val, el) {
   activeAvail = val;
   document.querySelectorAll('[data-avail]').forEach(e => e.classList.remove('active'));
   el.classList.add('active');
+
+  // 포지션 필터 클릭 시 상단 탭도 연동
+  if (val === 'all') {
+    activeFilter = 'all';
+  } else {
+    activeFilter = val; // ds, be, fe, ai
+  }
+  // 상단 탭 UI 동기화
+  document.querySelectorAll('#stats-bar .stat-item').forEach(e => e.classList.remove('active','active-ds','active-be','active-fe','active-ai','active-coffee'));
+  const tabEl = document.querySelector(`#stats-bar .stat-item[onclick*="'${activeFilter}'"]`);
+  if (tabEl) {
+    tabEl.classList.add('active');
+    if (activeFilter !== 'all') tabEl.classList.add('active-' + activeFilter);
+  }
+
   renderList();
 }
 function setSrc(val, el) {
