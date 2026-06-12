@@ -253,6 +253,7 @@
   .avail-tag { font-size: 10px; padding: 2px 7px; border-radius: 3px; }
   .avail-now { background: rgba(0,229,160,0.1); color: var(--accent); }
   .avail-later { background: rgba(255,255,255,0.05); color: var(--text3); }
+  .avail-date-note { font-size: 9px; color: var(--text3); opacity: 0.7; font-family: 'DM Mono', monospace; }
   .memo-text { font-size: 11px; color: var(--text3); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.5; }
 
   /* Detail panel */
@@ -478,7 +479,7 @@ async function fetchCoffeeSheet() {
 
 // 그룹바이 Tally 시트 (제출일 + 이력서 링크 포함)
 async function fetchGroupbyTally() {
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=0&range=A2:I100`;
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('Tally 인재풀')}&range=A2:I100`;
   try {
     const res  = await fetch(csvUrl);
     const text = await res.text();
@@ -488,7 +489,7 @@ async function fetchGroupbyTally() {
 
 // 그룹바이 현장 Waiting List
 async function fetchGroupbyField() {
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=1&range=A2:H50`;
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('현장 Waiting List')}&range=A2:H50`;
   try {
     const res  = await fetch(csvUrl);
     const text = await res.text();
@@ -498,7 +499,7 @@ async function fetchGroupbyField() {
 
 // 그룹바이 QR 리더기
 async function fetchGroupbyQR() {
-  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=2&range=A2:I100`;
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${GROUPBY_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('그룹바이 QR 리더기')}&range=A2:I100`;
   try {
     const res  = await fetch(csvUrl);
     const text = await res.text();
@@ -519,6 +520,8 @@ function parseGroupbyTallyCSV(text) {
     GROUPBY_TALLY_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
     // 이력서: 파일 업로드 우선, 없으면 링크
     obj.resume = obj.resume_file || obj.resume_link || '';
+    // 0년 → 신입 변환
+    obj.exp = normalizeExp(obj.exp);
     obj.source = 'Tally 인재풀';
     obj.isGroupby = true;
     obj.groupbyType = 'tally';
@@ -549,6 +552,7 @@ function parseGroupbyFieldCSV(text) {
     idx++;
     const obj = {};
     GROUPBY_FIELD_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    obj.exp = normalizeExp(obj.exp);
     obj.resume = '';
     obj.source = '현장 Waiting List';
     obj.isGroupby = true;
@@ -585,6 +589,7 @@ function parseGroupbyQRCSV(text) {
     const obj = {};
     GROUPBY_QR_COLS.forEach((k,i) => obj[k] = (cols[i]||'').trim().replace(/^"|"$/g,''));
     obj.name   = name;
+    obj.exp    = normalizeExp(obj.exp);
     obj.resume = obj.profile_link || '';
     obj.source = 'QR 리더기';
     obj.isGroupby = true;
@@ -603,6 +608,13 @@ function parseGroupbyQRCSV(text) {
     results.push(obj);
   }
   return results;
+}
+
+function normalizeExp(exp) {
+  if (!exp) return '';
+  const e = exp.trim();
+  if (e === '0' || e === '0년' || e === '0년차' || e === '신입(0년)') return '신입';
+  return e;
 }
 
 function mapPositionToRole(pos) {
@@ -788,12 +800,12 @@ function renderCandidateCard(c) {
       <div class="meta-row">
         <span class="meta-icon">⏱</span>
         <span>${c.exp || '—'}</span>
-        ${c.avail ? `<span class="avail-tag ${isNow?'avail-now':'avail-later'}">${isNow?'즉시':c.source.includes('현장')?'현장대기':'1~2개월'}</span>` : ''}
+        ${c.avail ? `<span class="avail-tag ${isNow?'avail-now':'avail-later'}">${isNow?'즉시':c.source.includes('현장')?'현장대기':'1~2개월'}<span class="avail-date-note">&nbsp;('26.1월 기준)</span></span>` : ''}
       </div>
       ${c.email ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${c.email}</span></div>` : ''}
       <div class="meta-row">
         <span class="source-tag ${isTally?'source-tally':'source-field'}">${isTally?'Tally':'현장'}</span>
-        ${c.resume ? `<span style="font-size:11px;color:#555">📎 이력서</span>` : ''}
+        ${c.resume && c.resume.startsWith('http') ? `<a href="${c.resume}" target="_blank" class="resume-dl-btn">📎 이력서</a>` : ''}
       </div>
     </div>
     ${c.memo ? `<div class="memo-text">${c.memo}</div>` : ''}
@@ -840,6 +852,10 @@ function renderGroupbyCard(c) {
       <span class="role-badge badge-${c.role}">${c.roleLabel}</span>
     </div>
     <div class="card-meta">
+      <div class="meta-row">
+        <span class="meta-icon">⏱</span><span>${c.exp || '—'}</span>
+        ${c.avail ? `<span class="avail-tag avail-later">${c.avail}<span class="avail-date-note">&nbsp;('26.1월 기준)</span></span>` : ''}
+      </div>
       ${c.phone ? `<div class="meta-row"><span class="meta-icon">📞</span><span>${c.phone}</span></div>` : ''}
       ${c.email ? `<div class="meta-row"><span class="meta-icon">✉</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px">${c.email}</span></div>` : ''}
       <div class="meta-row">
@@ -879,7 +895,7 @@ function openDetail(id) {
       ['경력',        c.exp || '—'],
       ['연락처',      c.phone  || '—'],
       ['이메일',      c.email  ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
-      ['지원 희망',   c.avail  || '—'],
+      ['지원 희망',   c.avail ? `${c.avail} <span style="font-size:11px;color:var(--text3)">('26.1월 기준)</span>` : '—'],
       ['출처',        c.source || '—'],
       ['이력서',      resumeVal],
       c.groupbyType === 'qr' ? ['그룹바이 프로필', profileVal] : ['비고', c.memo || '—'],
@@ -890,9 +906,9 @@ function openDetail(id) {
       ['경력',     c.exp    || '—'],
       ['연락처',   c.phone  || '—'],
       ['이메일',   c.email  ? `<a href="mailto:${c.email}">${c.email}</a>` : '—'],
-      ['지원 희망', c.avail || (c.source.includes('현장') ? '현장 대기' : '—')],
+      ['지원 희망', c.avail ? `${c.avail} <span style="font-size:11px;color:var(--text3)">('26.1월 기준)</span>` : (c.source.includes('현장') ? '현장 대기' : '—')],
       ['출처',     c.source || '—'],
-      ['이력서',   c.resume && c.resume !== '이력서 첨부됨' ? `<a href="${c.resume}" target="_blank">링크 열기</a>` : (c.resume || '없음')],
+      ['이력서',   c.resume && c.resume.startsWith('http') ? `<a href="${c.resume}" target="_blank" class="resume-dl-link">📎 이력서 다운로드</a>` : (c.resume && !c.resume.startsWith('http') ? c.resume : '없음')],
       ['면접 단계', c.interview || '—'],
       ['최종 결과', c.result    || '—'],
     ].map(([k,v]) => `<div class="detail-row"><span class="detail-key">${k}</span><span class="detail-val">${v}</span></div>`).join('');
